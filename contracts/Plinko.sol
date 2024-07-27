@@ -4,20 +4,27 @@ pragma solidity ^0.8.23;
 import "./Common.sol";
 
 /**
- * @title plinko game, players select a number of rows and risk and get payouts depending on the final position of the ball
+ * @title Plinko game, players select a number of rows and get payouts depending on the final position of the ball
  */
 contract Plinko is Common {
   using SafeERC20 for IERC20;
+  using Chainlink for Chainlink.Request;
 
-  constructor(address _bankroll, address _vrf, address link_eth_feed, address _forwarder) {
+  struct LightningMultiplier {
+    uint8 row;
+    uint8 position;
+    uint256 multiplier;
+  }
+
+  mapping(uint256 => LightningMultiplier[]) public lightningMultipliers;
+  uint256 public lightningModeFee;
+  bool public lightningModeActive;
+
+  constructor(address _bankroll, address _linkToken, address _forwarder) Common(_linkToken) {
     Bankroll = IBankRoll(_bankroll);
-    IChainLinkVRF = IVRFCoordinatorV2(_vrf);
-    LINK_ETH_FEED = AggregatorV3Interface(link_eth_feed);
-    ChainLinkVRF = _vrf;
     _trustedForwarder = _forwarder;
-    kellyFractions[0] = [573159, 240816, 372158, 267835, 453230, 480140, 327817, 384356, 467936];
-    kellyFractions[1] = [108157, 100164, 100856, 82065, 91981, 83772, 68092, 69475, 100288];
-    kellyFractions[2] = [31369, 25998, 38394, 27787, 29334, 29004, 22764, 21439, 27190];
+    lightningModeActive = false;
+    lightningModeFee = 0.01 ether; // Example fee for activating lightning mode
   }
 
   struct PlinkoGame {
@@ -38,17 +45,6 @@ contract Plinko is Common {
   mapping(uint8 => mapping(uint8 => bool)) isMultiplierSet;
   uint256[9][3] kellyFractions;
 
-  /**
-   * @dev event emitted at the start of the game
-   * @param playerAddress address of the player that made the bet
-   * @param wager wager amount
-   * @param tokenAddress address of token the wager was made and payout, 0 address is considered the native coin
-   * @param numRows number of rows selected
-   * @param risk risk selected
-   * @param numBets number of bets the player intends to make
-   * @param stopGain gain value at which the betting stop if a gain is reached
-   * @param stopLoss loss value at which the betting stop if a loss is reached
-   */
   event Plinko_Play_Event(
     address indexed playerAddress,
     uint256 wager,
@@ -58,20 +54,10 @@ contract Plinko is Common {
     uint32 numBets,
     uint256 stopGain,
     uint256 stopLoss,
-    uint256 VRFFee
+    uint256 VRFFee,
+    bool lightningModeActive
   );
-
-  /**
-   * @dev event emitted by the VRF callback with the bet results
-   * @param playerAddress address of the player that made the bet
-   * @param wager wager amount
-   * @param payout total payout transfered to the player
-   * @param tokenAddress address of token the wager was made and payout, 0 address is considered the native coin
-   * @param paths direction taken by the plinko ball at each row, true-> right, false->left
-   * @param risk risk selected by player
-   * @param payouts individual payouts for each bet
-   * @param numGames number of games performed
-   */
+  event Plinko_Refund_Event(address indexed playerAddress, uint256 wager, address tokenAddress);
   event Plinko_Outcome_Event(
     address indexed playerAddress,
     uint256 wager,
@@ -81,16 +67,8 @@ contract Plinko is Common {
     uint8 numRows,
     uint8 risk,
     uint256[] payouts,
-    uint32 numGames
+    uint32 numBets
   );
-
-  /**
-   * @dev event emitted when a refund is done in plinko
-   * @param player address of the player reciving the refund
-   * @param wager amount of wager that was refunded
-   * @param tokenAddress address of token the refund was made in
-   */
-  event Plinko_Refund_Event(address indexed player, uint256 wager, address tokenAddress);
 
   error AwaitingVRF(uint256 requestID);
   error InvalidNumRows();
@@ -104,81 +82,125 @@ contract Plinko is Common {
   error MultiplierAlreadySet(uint8 numRows, uint8 risk);
   error InvalidNumberToSet();
 
-  /**
-   * @dev function to get current request player is await from VRF, returns 0 if none
-   * @param player address of the player to get the state
-   */
-  function Plinko_GetState(address player) external view returns (PlinkoGame memory) {
-    return (plinkoGames[player]);
+  function setPlinkoKellyFractions(uint256[9][3] calldata _kellyFractions) external onlyOwner {
+    for (uint8 r = 0; r < 3; r++) {
+      for (uint8 p = 0; p < 9; p++) {
+        kellyFractions[r][p] = _kellyFractions[r][p];
+      }
+    }
   }
 
-  /**
-   * @dev function to view the current plinko multipliers
-   * @return multipliers all multipliers for all rows and risks
-   */
-  function Plinko_GetMultipliers() external view returns (uint256[17][9][3] memory multipliers) {
-    for (uint8 r = 0; r < 3; r++) {
-      for (uint8 g = 0; g < 9; g++) {
-        for (uint8 i = 0; i < 17; i++) {
-          multipliers[r][g][i] = plinkoMultipliers[r][g + 8][i];
+  function setPlinkoMultipliers(
+    uint256[17][9][3] calldata _plinkoMultipliers,
+    uint256[9][3] calldata _kellyFractions
+  ) external onlyOwner {
+    for (uint8 r = 0; r < 9; r++) {
+      for (uint8 p = 0; p < (r + 1); p++) {
+        for (uint8 q = 0; q < 3; q++) {
+          plinkoMultipliers[r][p][q] = _plinkoMultipliers[r][p][q];
         }
       }
     }
-    return multipliers;
+
+    for (uint8 r = 0; r < 3; r++) {
+      for (uint8 p = 0; p < 9; p++) {
+        kellyFractions[r][p] = _kellyFractions[r][p];
+      }
+    }
   }
 
-  /**
-   * @dev Function to play Plinko, takes the user wager saves bet parameters and makes a request to the VRF
-   * @param wager wager amount
-   * @param tokenAddress address of token to bet, 0 address is considered the native coin
-   * @param numBets number of bets to make, and amount of random numbers to request
-   * @param stopGain treshold value at which the bets stop if a certain profit is obtained
-   * @param stopLoss treshold value at which the bets stop if a certain loss is obtained
-   * @param numRows number of Rows that plinko will have, range 8-16
-   * @param risk risk for game, higher risk increases variance, range 0-2
-   */
-  function Plinko_Play(
-    uint256 wager,
-    address tokenAddress,
+  function Plinko_GetKelly(uint8 risk) external view returns (uint256[9] memory kelly) {
+    return kellyFractions[risk];
+  }
+
+  function Plinko_SetMultipliers(
     uint8 numRows,
     uint8 risk,
-    uint32 numBets,
-    uint256 stopGain,
-    uint256 stopLoss
-  ) external payable nonReentrant {
-    address msgSender = _msgSender();
-    if (numRows < 8 || numRows > 16) {
+    uint256[17] calldata multipliers
+  ) external onlyOwner {
+    if (numRows % 2 == 0 || numRows == 1) {
       revert InvalidNumRows();
     }
     if (risk >= 3) {
       revert InvalidRisk();
     }
-    if (plinkoGames[msgSender].requestID != 0) {
-      revert AwaitingVRF(plinkoGames[msgSender].requestID);
-    }
-    if (!(numBets > 0 && numBets <= 100)) {
-      revert InvalidNumBets(100);
+    if (isMultiplierSet[numRows][risk]) {
+      revert MultiplierAlreadySet(numRows, risk);
     }
 
-    _kellyWager(wager, tokenAddress, numRows, risk);
-    uint256 fee = _transferWager(tokenAddress, wager * numBets, 2000000, msgSender);
-    uint256 id = _requestRandomWords(numBets);
+    for (uint8 i = 0; i <= numRows; i++) {
+      plinkoMultipliers[numRows][i][risk] = multipliers[i];
+    }
+    isMultiplierSet[numRows][risk] = true;
+  }
 
-    plinkoGames[msgSender] = PlinkoGame(
-      wager,
-      stopGain,
-      stopLoss,
-      id,
-      tokenAddress,
-      uint64(block.number),
-      numBets,
-      risk,
-      numRows
-    );
-    plinkoIDs[id] = msgSender;
+  function Plinko_RefundPlayer(address player) external {
+    PlinkoGame storage plinkoGame = plinkoGames[player];
+    address tokenAddress = plinkoGame.tokenAddress;
+    uint256 wager = plinkoGame.wager;
+    if (tokenAddress == address(0)) {
+      (bool success, ) = player.call{ value: wager }("");
+      if (!success) {
+        revert TransferFailed();
+      }
+    } else {
+      IERC20(tokenAddress).safeTransfer(player, wager);
+    }
+    emit Plinko_Refund_Event(player, wager, tokenAddress);
+    delete (plinkoGames[player]);
+  }
+
+  function Plinko_CashOut(address player, uint256 payout) external onlyOwner {
+    PlinkoGame storage plinkoGame = plinkoGames[player];
+    Bankroll.transferPayout(player, payout, plinkoGame.tokenAddress);
+    delete (plinkoGames[player]);
+  }
+
+  function Plinko_Play(
+    uint8 numRows,
+    uint8 risk,
+    uint32 numBets,
+    address tokenAddress,
+    uint256 wager,
+    uint256 stopGain,
+    uint256 stopLoss
+  )
+    external
+    payable
+    // bool lightningModeActive
+    nonReentrant
+  {
+    if (plinkoGames[msg.sender].requestID != 0) {
+      revert AwaitingVRF(plinkoGames[msg.sender].requestID);
+    }
+    if (numRows % 2 == 0 || numRows == 1 || numRows > 17) {
+      revert InvalidNumRows();
+    }
+    if (risk >= 3) {
+      revert InvalidRisk();
+    }
+    if (numBets == 0) {
+      revert InvalidNumBets(numBets);
+    }
+
+    uint256 VRFFee = _transferWager(tokenAddress, wager, msg.sender);
+
+    uint256 requestId = _requestRandomWords();
+    plinkoGames[msg.sender] = PlinkoGame({
+      wager: wager,
+      stopGain: stopGain,
+      stopLoss: stopLoss,
+      requestID: requestId,
+      tokenAddress: tokenAddress,
+      blockNumber: uint64(block.number),
+      numBets: numBets,
+      risk: risk,
+      numRows: numRows
+    });
+    plinkoIDs[requestId] = msg.sender;
 
     emit Plinko_Play_Event(
-      msgSender,
+      msg.sender,
       wager,
       tokenAddress,
       numRows,
@@ -186,193 +208,84 @@ contract Plinko is Common {
       numBets,
       stopGain,
       stopLoss,
-      fee
+      VRFFee,
+      lightningModeActive
     );
   }
 
-  /**
-   * @dev Function to refund user in case of VRF request failling
-   */
-  function Plinko_Refund() external nonReentrant {
-    address msgSender = _msgSender();
-    PlinkoGame storage game = plinkoGames[msgSender];
-    if (game.requestID == 0) {
-      revert NotAwaitingVRF();
-    }
-    if (game.blockNumber + BLOCK_NUMBER_REFUND + 10 > block.number) {
-      revert BlockNumberTooLow(block.number, game.blockNumber + BLOCK_NUMBER_REFUND + 10);
-    }
+  function _requestRandomWords(
+    uint256 _betAmount,
+    uint256 _group
+  ) internal returns (bytes32 requestId) {
+    Chainlink.Request memory req = buildChainlinkRequest(
+      jobId,
+      address(this),
+      this.fulfillRandomWords.selector
+    );
 
-    uint256 wager = game.wager * game.numBets;
-    address tokenAddress = game.tokenAddress;
+    requestId = sendChainlinkRequestTo(oracle, req, fee);
 
-    delete (plinkoIDs[game.requestID]);
-    delete (plinkoGames[msgSender]);
+    s_requests[requestId] = RequestStatus({
+      randomWord: 0,
+      exists: true,
+      fulfilled: false,
+      betAmount: _betAmount,
+      bettor: msg.sender,
+      group: _group
+    });
 
-    if (tokenAddress == address(0)) {
-      (bool success, ) = payable(msgSender).call{ value: wager }("");
-      if (!success) {
-        revert TransferFailed();
+    emit RequestSent(requestId, msg.sender);
+    return requestId;
+  }
+
+  function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
+    address player = plinkoIDs[requestId];
+    PlinkoGame storage plinkoGame = plinkoGames[player];
+
+    uint8 numRows = plinkoGame.numRows;
+    uint8 risk = plinkoGame.risk;
+    uint32 numBets = plinkoGame.numBets;
+    uint256 wager = plinkoGame.wager;
+    uint256 stopGain = plinkoGame.stopGain;
+    uint256 stopLoss = plinkoGame.stopLoss;
+    address tokenAddress = plinkoGame.tokenAddress;
+
+    uint16[] memory paths = new uint16[](numBets);
+    uint256[] memory payouts = new uint256[](numBets);
+    uint256 totalPayout = 0;
+
+    for (uint32 i = 0; i < numBets; i++) {
+      uint256 r = uint256(keccak256(abi.encode(randomWords[i]))) % 2 ** numRows;
+      paths[i] = uint16(r);
+      uint8 position = 0;
+      for (uint8 j = 0; j < numRows; j++) {
+        position += uint8((r >> j) & 1);
       }
-    } else {
-      IERC20(tokenAddress).safeTransfer(msgSender, wager);
-    }
-    emit Plinko_Refund_Event(msgSender, wager, tokenAddress);
-  }
+      payouts[i] = (wager * plinkoMultipliers[numRows][position][risk]) / 1000;
+      totalPayout += payouts[i];
 
-  /**
-   * @dev function to set the plinko multipliers, can only be called by bankroll owner
-   * @param multipliers array of all multipliers for the selected number of rows and risk
-   * @param numRows number of rows to set multiplier
-   * @param risk risk to set multiplier
-   */
-  function setPlinkoMultipliers(
-    uint256[] calldata multipliers,
-    uint8 numRows,
-    uint8 risk
-  ) external {
-    if (msg.sender != Bankroll.getOwner()) {
-      revert NotOwner(Bankroll.getOwner(), msg.sender);
-    }
-    if (isMultiplierSet[risk][numRows]) {
-      revert MultiplierAlreadySet(numRows, risk);
-    }
-
-    if (multipliers.length != numRows + 1) {
-      revert MismatchedLength(multipliers.length, numRows + 1);
-    }
-    if (numRows < 8 || numRows > 16) {
-      revert InvalidNumRows();
-    }
-    if (risk >= 3) {
-      revert InvalidRisk();
-    }
-
-    for (uint8 i = 0; i < multipliers.length; i++) {
-      plinkoMultipliers[risk][numRows][i] = multipliers[i];
-    }
-    isMultiplierSet[risk][numRows] = true;
-  }
-
-  /**
-   * @dev function called by Chainlink VRF with random numbers
-   * @param requestId id provided when the request was made
-   * @param randomWords array of random numbers
-   */
-  function rawFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external {
-    if (msg.sender != ChainLinkVRF) {
-      revert OnlyCoordinatorCanFulfill(msg.sender, ChainLinkVRF);
-    }
-    fulfillRandomWords(requestId, randomWords);
-  }
-
-  function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal {
-    address playerAddress = plinkoIDs[requestId];
-    if (playerAddress == address(0)) revert();
-    PlinkoGame storage game = plinkoGames[playerAddress];
-    if (block.number > game.blockNumber + BLOCK_NUMBER_REFUND) revert();
-
-    uint16[] memory gamesResults = new uint16[](game.numBets);
-    uint256[] memory payouts = new uint256[](game.numBets);
-
-    int256 totalValue;
-    uint256 payout;
-    uint32 i;
-    uint256 multiplier;
-
-    address tokenAddress = game.tokenAddress;
-
-    for (i = 0; i < game.numBets; i++) {
-      if (totalValue >= int256(game.stopGain)) {
+      if (totalPayout >= stopGain || totalPayout <= stopLoss) {
         break;
       }
-      if (totalValue <= -int256(game.stopLoss)) {
-        break;
-      }
-
-      (multiplier, gamesResults[i]) = _plinkoGame(randomWords[i], game.numRows, game.risk);
-
-      payouts[i] = (game.wager * multiplier) / 100;
-      payout += payouts[i];
-      totalValue += int256(payouts[i]) - int256(game.wager);
     }
 
-    payout += (game.numBets - i) * game.wager;
+    if (totalPayout > 0) {
+      Bankroll.transferPayout(player, totalPayout, tokenAddress);
+    }
 
     emit Plinko_Outcome_Event(
-      playerAddress,
-      game.wager,
-      payout,
+      player,
+      wager,
+      totalPayout,
       tokenAddress,
-      gamesResults,
-      game.numRows,
-      game.risk,
+      paths,
+      numRows,
+      risk,
       payouts,
-      i
+      numBets
     );
-    _transferToBankroll(tokenAddress, game.wager * game.numBets);
+
+    delete (plinkoGames[player]);
     delete (plinkoIDs[requestId]);
-    delete (plinkoGames[playerAddress]);
-    if (payout != 0) {
-      _transferPayout(playerAddress, payout, tokenAddress);
-    }
-  }
-
-  /**
-   * @dev function to get result of individual plinko game
-   * @param randomWords rng to determine the result
-   * @param numRows number of rows of game
-   * @param risk risk level selected
-   */
-  function _plinkoGame(
-    uint256 randomWords,
-    uint8 numRows,
-    uint8 risk
-  ) internal view returns (uint256 multiplier, uint16 currentGameResult) {
-    int8 ended = 0;
-    for (uint8 g = 0; g < numRows; g++) {
-      bool bitValue = _getBitValue(randomWords, g);
-      if (bitValue) {
-        ended += 1;
-        currentGameResult = setBit(currentGameResult, g);
-      } else {
-        ended -= 1;
-      }
-    }
-    uint8 multiplierSlot = uint8(ended + int8(numRows)) >> 1;
-    multiplier = plinkoMultipliers[risk][numRows][multiplierSlot];
-  }
-
-  function _getBitValue(uint256 four_nibbles, uint256 index) internal pure returns (bool) {
-    return (four_nibbles & (1 << index)) != 0;
-  }
-
-  uint16 internal constant ONE = uint16(1);
-
-  // Sets the bit at the given 'index' in 'self' to '1'.
-  // Returns the modified value.
-  function setBit(uint16 self, uint8 index) internal pure returns (uint16) {
-    return self | (ONE << index);
-  }
-
-  /**
-   * @dev calculates the maximum wager allowed based on the bankroll size
-   */
-  function _kellyWager(
-    uint256 wager,
-    address tokenAddress,
-    uint8 numRows,
-    uint8 risk
-  ) internal view {
-    uint256 balance;
-    if (tokenAddress == address(0)) {
-      balance = address(Bankroll).balance;
-    } else {
-      balance = IERC20(tokenAddress).balanceOf(address(Bankroll));
-    }
-    uint256 maxWager = (balance * kellyFractions[risk][numRows - 8]) / 100000000;
-    if (wager > maxWager) {
-      revert WagerAboveLimit(wager, maxWager);
-    }
   }
 }
