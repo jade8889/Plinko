@@ -2194,31 +2194,41 @@ contract JadeCoreBankroll is Ownable, ReentrancyGuard, AccessControlEnumerable {
   using SafeERC20 for IERC20;
 
   bytes32 public constant GAME_ROLE = keccak256("GAME_ROLE");
-  IJadeToken public jade;
+  //   IJadeToken public jade;
   // IFuToken public fu;
 
   event FundsSent(address indexed receptor, uint256 amount);
   event MaticWithdrawn(uint256 amount, address indexed receptor, uint256 gas);
 
-  constructor(IJadeToken _jade) Ownable() ReentrancyGuard() {
-    jade = _jade;
+  constructor() Ownable() ReentrancyGuard() {
+    // jade = _jade;
     _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
   }
 
-  function getFunds(uint256 _amount, address receptor) external nonReentrant {
+  function transferPayout(address receptor, uint256 _amount, address token) external nonReentrant {
     require(hasRole(GAME_ROLE, _msgSender()), "Must have GAME role");
     require(_amount > 0, "amount must be greater than 0");
 
-    uint256 balance = jade.balanceOf(address(this));
-    if (_amount > balance) {
-      uint256 diffAmount = _amount - balance;
-      jade.mint(receptor, diffAmount);
-      // IERC20(address(jade)).safeTransferFrom(address(this), receptor, balance);
-      IERC20(address(jade)).safeTransfer(receptor, balance);
-    } else {
-      // IERC20(address(jade)).safeTransferFrom(address(this), receptor, _amount);
-      IERC20(address(jade)).safeTransfer(receptor, _amount);
-    }
+    //     if (tokenAddress == address(0)) {
+    //   if (msg.value < wager) {
+    //     revert InvalidValue(wager, msg.value);
+    //   }
+    //   _refundExcessValue(msg.value - wager);
+    // } else {
+    //   IERC20(tokenAddress).safeTransferFrom(msgSender, address(this), wager);
+    // }
+
+    // uint256 balance = IERC20(token).balanceOf(address(this));
+    IERC20(token).safeTransfer(receptor, _amount);
+    // if (_amount > balance) {
+    //   uint256 diffAmount = _amount - balance;
+    //   //   jade.mint(receptor, diffAmount);
+    //   // IERC20(address(jade)).safeTransferFrom(address(this), receptor, balance);
+    //   IERC20(token).safeTransfer(receptor, balance);
+    // } else {
+    //   // IERC20(address(jade)).safeTransferFrom(address(this), receptor, _amount);
+    //   IERC20(token).safeTransfer(receptor, _amount);
+    // }
 
     emit FundsSent(receptor, _amount);
   }

@@ -7,11 +7,13 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IBankRoll {
-  function getIsGame(address game) external view returns (bool);
-  function getIsValidWager(address game, address tokenAddress) external view returns (bool);
+  // function getIsGame(address game) external view returns (bool);
+  // function getIsValidWager(address game, address tokenAddress) external view returns (bool);
   function transferPayout(address player, uint256 payout, address token) external;
-  function getOwner() external view returns (address);
-  function isPlayerSuspended(address player) external view returns (bool, uint256);
+  // function getFunds(uint256 _amount, address receptor) external;
+
+  // function getOwner() external view returns (address);
+  // function isPlayerSuspended(address player) external view returns (bool, uint256);
 }
 
 contract Common is ReentrancyGuard {
@@ -35,16 +37,16 @@ contract Common is ReentrancyGuard {
    * @param wager total amount wagered
    */
   function _transferWager(address tokenAddress, uint256 wager, address msgSender) internal {
-    if (!Bankroll.getIsValidWager(address(this), tokenAddress)) {
-      revert NotApprovedBankroll();
-    }
-    if (wager == 0) {
-      revert ZeroWager();
-    }
-    (bool suspended, uint256 suspendedTime) = Bankroll.isPlayerSuspended(msgSender);
-    if (suspended) {
-      revert PlayerSuspended(suspendedTime);
-    }
+    // if (!Bankroll.getIsValidWager(address(this), tokenAddress)) {
+    //   revert NotApprovedBankroll();
+    // }
+    // if (wager == 0) {
+    //   revert ZeroWager();
+    // }
+    // (bool suspended, uint256 suspendedTime) = Bankroll.isPlayerSuspended(msgSender);
+    // if (suspended) {
+    //   revert PlayerSuspended(suspendedTime);
+    // }
 
     if (tokenAddress == address(0)) {
       if (msg.value < wager) {
