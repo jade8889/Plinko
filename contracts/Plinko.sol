@@ -80,9 +80,7 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
   error InvalidNumRows();
   error InvalidRisk();
   error InvalidNumBets(uint256 maxNumBets);
-  error OnlyCoordinatorCanFulfill(address have, address want);
   error WagerAboveLimit(uint256 wager, uint256 maxWager);
-  error NotAwaitingVRF();
   error BlockNumberTooLow(uint256 have, uint256 want);
   error MismatchedLength(uint256 multipliers, uint256 outcome);
   error MultiplierAlreadySet(uint8 numRows, uint8 risk);
