@@ -1,13 +1,24 @@
+import shouldBehaveLikeConstructor from "./effects/constructor";
+import shouldBehaveLikeWithdraw from "./effects/withdraw";
+import shouldBehaveLikeOwner from "./view/owner";
+import shouldBehaveLikeUnlockTime from "./view/unlockTime";
+
 export function shouldBehaveLikePlinkoContract(): void {
-  describe("Plinko Contract Behavior", function () {
-    it("should set the correct initial values", async function () {
-      const lightningModeActive = await this.contracts.plinko.lightningModeActive();
-      assert.equal(lightningModeActive, false, "Lightning mode should be initially inactive");
-
-      const lightningModeFee = await this.contracts.plinko.lightningModeFee();
-      assert.equal(lightningModeFee.toString(), ethers.utils.parseEther("0.01").toString(), "Lightning mode fee should be 0.01 ether");
+  describe("View Functions", function () {
+    describe("#owner", function () {
+      shouldBehaveLikeOwner();
     });
+    describe("#unlockTime", function () {
+      shouldBehaveLikeUnlockTime();
+    });
+  });
 
-    // Add more tests to cover all functionalities and edge cases
+  describe("Effects Functions", function () {
+    describe("#constructor", function () {
+      shouldBehaveLikeConstructor();
+    });
+    describe("#withdraw", function () {
+      shouldBehaveLikeWithdraw();
+    });
   });
 }
