@@ -1,6 +1,6 @@
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import type { Lock } from "../../types/Lock";
+import type { Lock, Plinko } from "../../types/";
 
 type Fixture<T> = () => Promise<T>;
 
@@ -14,6 +14,7 @@ declare module "mocha" {
 
 export interface Contracts {
   lock: Lock;
+  plinko: Plinko;
 }
 
 export interface Signers {

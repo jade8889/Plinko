@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.0;
 
-import "./Common.sol";
+import "./ZkazinoCommon.sol";
 
 /**
  * @title plinko game, players select a number of rows and risk and get payouts depending on the final position of the ball

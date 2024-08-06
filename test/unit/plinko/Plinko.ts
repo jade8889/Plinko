@@ -1,15 +1,9 @@
-import { shouldBehaveLikeLockContract } from "./Plinko.behavior";
-import { plinkoFixture } from "./Plinko.fixture";
+import { shouldBehaveLikePlinkoContract } from "./Plinko.behavior";
 
-export function testLock(): void {
-  describe("Lock", function () {
-    beforeEach(async function () {
-      const { lock, unlockTime, lockedAmount } = await this.loadFixture(plinkoFixture);
-      this.contracts.lock = lock;
-      this.unlockTime = unlockTime;
-      this.lockedAmount = lockedAmount;
-    });
+export function testPlinko(): void {
+  describe("Plinko", function () {
+    beforeEach(async function () { });
 
-    shouldBehaveLikeLockContract();
+    shouldBehaveLikePlinkoContract();
   });
 }
