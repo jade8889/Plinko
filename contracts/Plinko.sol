@@ -22,7 +22,7 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
   ) ConfirmedOwner(msg.sender) ReentrancyGuard() {
     Bankroll = IBankRoll(_bankroll);
     _trustedForwarder = _forwarder;
-    setChainlinkToken(0x88038752750D7717a19F2A681eF75e65Fb714f1E); // Set your LINK token address
+    setChainlinkToken(0x514910771AF9Ca656af840dff83E8264EcF986CA); // Set your LINK token address
     setOracleAddress(_oracle);
     setJobId(_jobId);
     setFeeInJuels(_fee);
@@ -51,6 +51,7 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
   uint256[9][3] kellyFractions;
 
   event Plinko_Play_Event(
+    bytes32 indexed id,
     address indexed playerAddress,
     uint256 wager,
     address tokenAddress,
@@ -108,7 +109,7 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
     uint256 stopGain,
     uint256 stopLoss
   ) external payable nonReentrant {
-    address msgSender = _msgSender();
+    address msgSender = msg.sender;
     if (numRows < 8 || numRows > 16) {
       revert InvalidNumRows();
     }
@@ -125,7 +126,7 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
     _kellyWager(wager, tokenAddress, numRows, risk);
     // uint256 fee = _transferWager(tokenAddress, wager * numBets, msgSender);
     _transferWager(tokenAddress, wager * numBets, msgSender);
-    bytes32 id = requestRandomWords();
+    bytes32 id = _requestRandomWords();
 
     plinkoGames[msgSender] = PlinkoGame(
       wager,
@@ -141,6 +142,7 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
     plinkoIDs[id] = msgSender;
 
     emit Plinko_Play_Event(
+      id,
       msgSender,
       wager,
       tokenAddress,
@@ -153,15 +155,43 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
     );
   }
 
-  function requestRandomWords() internal returns (bytes32 requestId) {
+  function _requestRandomWords() internal returns (bytes32 requestId) {
     Chainlink.Request memory req = buildOperatorRequest(jobId, this.fulfillRandomWords.selector);
     requestId = sendOperatorRequest(req, fee);
   }
 
+  function setPlinkoMultipliers(
+    uint256[] calldata multipliers,
+    uint8 numRows,
+    uint8 risk
+  ) external {
+    if (msg.sender != Bankroll.owner()) {
+      revert NotOwner(Bankroll.owner(), msg.sender);
+    }
+    if (isMultiplierSet[risk][numRows]) {
+      revert MultiplierAlreadySet(numRows, risk);
+    }
+
+    if (multipliers.length != numRows + 1) {
+      revert MismatchedLength(multipliers.length, numRows + 1);
+    }
+    if (numRows < 8 || numRows > 16) {
+      revert InvalidNumRows();
+    }
+    if (risk >= 3) {
+      revert InvalidRisk();
+    }
+
+    for (uint8 i = 0; i < multipliers.length; i++) {
+      plinkoMultipliers[risk][numRows][i] = multipliers[i];
+    }
+    isMultiplierSet[risk][numRows] = true;
+  }
+
   function fulfillRandomWords(
     bytes32 requestId,
-    uint256[] memory randomWords
-  ) public recordChainlinkFulfillment(requestId) {
+    uint256[] memory randomWords // recordChainlinkFulfillment(requestId)
+  ) public {
     // Implement the fulfillment logic based on your requirements
     address playerAddress = plinkoIDs[requestId];
     if (playerAddress == address(0)) revert();
@@ -185,7 +215,6 @@ contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
       if (totalValue <= -int256(game.stopLoss)) {
         break;
       }
-
       (multiplier, gamesResults[i]) = _plinkoGame(randomWords[i], game.numRows, game.risk);
 
       payouts[i] = (game.wager * multiplier) / 100;

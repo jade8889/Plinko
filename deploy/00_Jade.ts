@@ -5,6 +5,7 @@ import type { HardhatRuntimeEnvironment } from "hardhat/types";
 
 import { preDeploy } from "../utils/contracts";
 import { verifyContract } from "../utils/verify";
+import { isLocalhostNetwork } from "../utils/networks";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { getNamedAccounts, getChainId, deployments } = hre;
@@ -12,29 +13,16 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await getNamedAccounts();
   const chainId = await getChainId();
 
-  const ONE_YEAR_IN_SECS = time.duration.years(1);
-  const ONE_WEI = "1";
-
-  const currentTimestampInSeconds = await time.latest();
-  const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
-  const lockedAmount = ONE_WEI;
-
-  type ConstructorParams = [BigNumberish];
-  const args: ConstructorParams = [unlockTime];
-
-  await preDeploy(deployer, "Lock");
-  const deployResult: DeployResult = await deploy("Lock", {
-    // Learn more about args here: https://www.npmjs.com/package/hardhat-deploy#deploymentsdeploy
+  await preDeploy(deployer, "Jade");
+  const deployResult: DeployResult = await deploy("JadeToken", {
     from: deployer,
-    args: args,
+    args: [],
     log: true,
-    value: lockedAmount.toString(),
-    // waitConfirmations: 5,
   });
 
   // You don't want to verify on localhost
-  if (chainId !== "31337" && chainId !== "1337") {
-    const contractPath = `contracts/Lock.sol:Lock`;
+  if (isLocalhostNetwork(chainId) === false) {
+    const contractPath = `contracts/Jade.sol:JadeToken`;
     await verifyContract({
       contractPath: contractPath,
       contractAddress: deployResult.address,
@@ -44,5 +32,5 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 };
 
 export default func;
-func.id = "deploy_lock";
-func.tags = ["Lock"];
+func.id = "deploy_jadeToken";
+func.tags = ["JadeToken"];

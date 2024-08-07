@@ -101,7 +101,12 @@ const config: HardhatUserConfig = {
     // Local network configs
     anvil: { chainId: 31337, url: "http://127.0.0.1:8545" },
     ganache: { chainId: 1337, url: "http://127.0.0.1:7545" },
-    hardhat: { chainId: 31337 },
+    hardhat: {
+      forking: {
+        url: "https://mainnet.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad",
+        // url: "https://base.blockpi.network/v1/rpc/public",
+      },
+    },
     localhost: { chainId: 31337 },
     "truffle-dashboard": {
       url: "http://localhost:24012/rpc",

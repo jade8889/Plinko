@@ -4,7 +4,7 @@ import type { HardhatRuntimeEnvironment } from "hardhat/types";
 
 import { preDeploy } from "../utils/contracts";
 import { generateSalt } from "../utils/misc";
-// import { isLocalhostNetwork } from "../utils/networks";
+import { isLocalhostNetwork } from "../utils/networks";
 import { verifyContract } from "../utils/verify";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
@@ -13,23 +13,15 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await getNamedAccounts();
   const chainId = await getChainId();
 
-  // TODO: Choose values based on current network
-  const delay = "172800"; // 2 days
-  const adminAddress = deployer;
-
-  type ConstructorParams = [BigNumberish, AddressLike];
-  const args: ConstructorParams = [delay, adminAddress];
-
-  await preDeploy(deployer, "Plinko");
-  const deployResult: DeployResult = await deploy("Plinko", {
+  await preDeploy(deployer, "JadeCoreBankroll");
+  const deployResult: DeployResult = await deploy("JadeCoreBankroll", {
     from: deployer,
-    // deterministicDeployment: generateSalt("TRENtestnet"),
-    args: args,
+    args: [],
     log: true,
   });
 
   if (isLocalhostNetwork(chainId) === false) {
-    const contractPath = `contracts/Timelock.sol:Timelock`;
+    const contractPath = `contracts/JadeCoreBankRoll.sol:JadeCoreBankroll`;
     await verifyContract({
       contractPath: contractPath,
       contractAddress: deployResult.address,
@@ -39,5 +31,5 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 };
 
 export default func;
-func.id = "deploy_timelock";
-func.tags = ["Timelock"];
+func.id = "deploy_jadeCoreBankRoll";
+func.tags = ["JadeCoreBankRoll"];

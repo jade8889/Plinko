@@ -12,7 +12,7 @@ interface IBankRoll {
   function transferPayout(address player, uint256 payout, address token) external;
   // function getFunds(uint256 _amount, address receptor) external;
 
-  // function getOwner() external view returns (address);
+  function owner() external view returns (address);
   // function isPlayerSuspended(address player) external view returns (bool, uint256);
 }
 
@@ -119,16 +119,16 @@ contract Common is ReentrancyGuard {
     return forwarder == _trustedForwarder;
   }
 
-  function _msgSender() internal view returns (address ret) {
-    if (msg.data.length >= 20 && isTrustedForwarder(msg.sender)) {
-      // At this point we know that the sender is a trusted forwarder,
-      // so we trust that the last bytes of msg.data are the verified sender address.
-      // extract sender address from the end of msg.data
-      assembly {
-        ret := shr(96, calldataload(sub(calldatasize(), 20)))
-      }
-    } else {
-      ret = msg.sender;
-    }
-  }
+  // function _msgSender() internal view returns (address ret) {
+  //   if (msg.data.length >= 20 && isTrustedForwarder(msg.sender)) {
+  //     // At this point we know that the sender is a trusted forwarder,
+  //     // so we trust that the last bytes of msg.data are the verified sender address.
+  //     // extract sender address from the end of msg.data
+  //     assembly {
+  //       ret := shr(96, calldataload(sub(calldatasize(), 20)))
+  //     }
+  //   } else {
+  //     ret = msg.sender;
+  //   }
+  // }
 }

@@ -6,7 +6,7 @@ import "./ZkazinoCommon.sol";
 /**
  * @title plinko game, players select a number of rows and risk and get payouts depending on the final position of the ball
  */
-contract Plinko is Common {
+contract ZkazinoPlinko is ZkazinoCommon {
   using SafeERC20 for IERC20;
 
   constructor(address _bankroll, address _vrf, address link_eth_feed, address _forwarder) {

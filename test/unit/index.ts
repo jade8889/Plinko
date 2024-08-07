@@ -4,7 +4,7 @@ import { ethers, network } from "hardhat";
 
 import type { Contracts, Signers } from "../shared/types";
 import { loadDeploymentFixture } from "./deployment.fixture";
-import { testLock } from "./lock/Lock";
+import { testPlinko } from "./plinko/Plinko";
 
 describe("Unit tests", function () {
   before(async function () {
@@ -19,5 +19,5 @@ describe("Unit tests", function () {
     this.contracts = await this.loadFixture(loadDeploymentFixture);
   });
 
-  testLock();
+  testPlinko();
 });

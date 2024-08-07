@@ -27,7 +27,7 @@ interface IVRFCoordinatorV2 is VRFCoordinatorV2Interface {
     returns (uint32, uint32, uint32, uint32, uint32, uint24, uint24, uint24, uint24);
 }
 
-contract Common is ReentrancyGuard {
+contract ZkazinoCommon is ReentrancyGuard {
   using SafeERC20 for IERC20;
 
   uint256 public VRFFees;
