@@ -27,11 +27,7 @@ export function testPlinko(): void {
       this.snapshotId = await network.provider.send("evm_snapshot");
       this.users = [];
 
-      await this.contracts.jadeToken.mint(
-        await this.contracts.jadeCoreBankroll.getAddress(),
-        parseEther("100000")
-      );
-      await this.contracts.jadeToken.mint(this.signers.deployer.address, parseEther("100000"));
+      await this.contracts.jadeToken.mint(this.signers.deployer.address, parseEther("1000000"));
     });
 
     afterEach(async function () {

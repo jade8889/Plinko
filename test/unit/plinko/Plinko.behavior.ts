@@ -1,5 +1,6 @@
 import shouldBehaveLikePlay from "./effects/play";
-import shouldBehaveLikeWithdraw from "./effects/withdraw";
+import shouldBehaveLikeMultiplier from "./effects/multiplier";
+import shouldBehaveLikeClaim from "./effects/claim";
 import shouldBehaveLikeOwner from "./view/owner";
 
 export function shouldBehaveLikePlinkoContract(): void {
@@ -10,11 +11,14 @@ export function shouldBehaveLikePlinkoContract(): void {
   });
 
   describe("Effects Functions", function () {
-    // describe("#play", function () {
-    //   shouldBehaveLikePlay();
-    // });
-    describe("#withdraw", function () {
-      shouldBehaveLikeWithdraw();
+    describe("#multiplier", function () {
+      shouldBehaveLikeMultiplier();
+    });
+    describe("#play", function () {
+      shouldBehaveLikePlay();
+    });
+    describe("#claim", function () {
+      shouldBehaveLikeClaim();
     });
   });
 }

@@ -15,21 +15,34 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const jadeCoreBankRollDeployment = await deployments.get("JadeCoreBankroll");
 
-  await preDeploy(deployer, "Plinko");
+  // await preDeploy(deployer, "Plinko");
+
+  // const _forwarder = deployer;
+  // const _oracle = "0xc287d52DFF95A6A49bdd2c3BB985c0E581b33d9c";
+  // const _jobId = "04b672c3f6ea455184c7d8700dd71851";
+  // const _fee = 0;
+
+  // const deployResult: DeployResult = await deploy("Plinko", {
+  //   from: deployer,
+  //   args: [jadeCoreBankRollDeployment.address, _forwarder, _oracle, _jobId, _fee],
+  //   log: true,
+  // });
+
+  await preDeploy(deployer, "PlinkoMock");
 
   const _forwarder = deployer;
   const _oracle = "0xc287d52DFF95A6A49bdd2c3BB985c0E581b33d9c";
   const _jobId = "04b672c3f6ea455184c7d8700dd71851";
   const _fee = 0;
 
-  const deployResult: DeployResult = await deploy("Plinko", {
+  const deployResult: DeployResult = await deploy("PlinkoMock", {
     from: deployer,
     args: [jadeCoreBankRollDeployment.address, _forwarder, _oracle, _jobId, _fee],
     log: true,
   });
 
   if (isLocalhostNetwork(chainId) === false) {
-    const contractPath = `contracts/JadeCoreBankRoll.sol:JadeCoreBankroll`;
+    const contractPath = `contracts/Plinko.sol:Plinko`;
     await verifyContract({
       contractPath: contractPath,
       contractAddress: deployResult.address,

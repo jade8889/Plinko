@@ -7,7 +7,7 @@ export async function loadDeploymentFixture(): Promise<Contracts> {
 
   const jadeToken = await ethers.getContractAt("JadeToken", deploymentSummary.JadeToken.address);
   const jadeCoreBankroll = await ethers.getContractAt("JadeCoreBankroll", deploymentSummary.JadeCoreBankroll.address);
-  const plinko = await ethers.getContractAt("Plinko", deploymentSummary.Plinko.address);
+  const plinko = await ethers.getContractAt("PlinkoMock", deploymentSummary.PlinkoMock.address);
 
   return {
     jadeToken,

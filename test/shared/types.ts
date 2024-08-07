@@ -1,6 +1,6 @@
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import type { JadeToken, Plinko, JadeCoreBankroll } from "../../types/";
+import type { JadeToken, PlinkoMock, JadeCoreBankroll } from "../../types/";
 
 type Fixture<T> = () => Promise<T>;
 
@@ -14,7 +14,7 @@ declare module "mocha" {
 
 export interface Contracts {
   jadeToken: JadeToken;
-  plinko: Plinko;
+  plinko: PlinkoMock;
   jadeCoreBankroll: JadeCoreBankroll;
 }
 

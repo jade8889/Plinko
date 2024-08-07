@@ -213,8 +213,8 @@ contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
 
   function fulfillRandomWords(
     bytes32 requestId,
-    uint256[] memory randomWords
-  ) public recordChainlinkFulfillment(requestId) {
+    uint256[] memory randomWords // recordChainlinkFulfillment(requestId)
+  ) public {
     // Implement the fulfillment logic based on your requirements
     address playerAddress = plinkoIDs[requestId];
     if (playerAddress == address(0)) revert();
