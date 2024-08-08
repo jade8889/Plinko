@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.0;
 
-import "../Common.sol";
+import "./Common.sol";
 
 /**
  * @title plinko game, players select a number of rows and risk and get payouts depending on the final position of the ball
  */
-contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
+contract Plinko is Common, ChainlinkClient, ConfirmedOwner {
   using SafeERC20 for IERC20;
 
   address private oracleAddress;
   bytes32 private jobId;
   uint256 private fee;
+  bool public isLightningModeEnabled;
+
+  uint256 public constant LIGHTNING_MULTIPLIER = 10; // Define a multiplier value for lightning mode
 
   constructor(
     address _bankroll,
@@ -69,6 +72,7 @@ contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
     uint256 payout,
     address tokenAddress,
     uint16[] paths,
+    bool[] lightningMode,
     uint8 numRows,
     uint8 risk,
     uint256[] payouts,
@@ -215,21 +219,60 @@ contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
     bytes32 requestId,
     uint256[] memory randomWords
   ) public recordChainlinkFulfillment(requestId) {
-    // Implement the fulfillment logic based on your requirements
     address playerAddress = plinkoIDs[requestId];
     if (playerAddress == address(0)) revert();
     PlinkoGame storage game = plinkoGames[playerAddress];
     if (block.number > game.blockNumber + 1000) revert();
 
-    uint16[] memory gamesResults = new uint16[](game.numBets);
-    uint256[] memory payouts = new uint256[](game.numBets);
+    (
+      uint16[] memory gamesResults,
+      uint256[] memory payouts,
+      bool[] memory lightningModes,
+      uint256 payout,
+      uint32 numGames
+    ) = _processPlinkoGames(game, randomWords);
+
+    emit Plinko_Outcome_Event(
+      playerAddress,
+      game.wager,
+      payout,
+      game.tokenAddress,
+      gamesResults,
+      lightningModes,
+      game.numRows,
+      game.risk,
+      payouts,
+      numGames
+    );
+    _transferToBankroll(game.tokenAddress, game.wager * game.numBets);
+    delete (plinkoIDs[requestId]);
+    delete (plinkoGames[playerAddress]);
+    if (payout != 0) {
+      _transferPayout(playerAddress, payout, game.tokenAddress);
+    }
+  }
+
+  function _processPlinkoGames(
+    PlinkoGame storage game,
+    uint256[] memory randomWords
+  )
+    internal
+    view
+    returns (
+      uint16[] memory gamesResults,
+      uint256[] memory payouts,
+      bool[] memory lightningModes,
+      uint256 payout,
+      uint32 numGames
+    )
+  {
+    gamesResults = new uint16[](game.numBets);
+    payouts = new uint256[](game.numBets);
+    lightningModes = new bool[](game.numBets);
 
     int256 totalValue;
-    uint256 payout;
     uint32 i;
     uint256 multiplier;
-
-    address tokenAddress = game.tokenAddress;
 
     for (i = 0; i < game.numBets; i++) {
       if (totalValue >= int256(game.stopGain)) {
@@ -238,7 +281,11 @@ contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
       if (totalValue <= -int256(game.stopLoss)) {
         break;
       }
-      (multiplier, gamesResults[i]) = _plinkoGame(randomWords[i], game.numRows, game.risk);
+      (multiplier, gamesResults[i], lightningModes[i]) = _plinkoGame(
+        randomWords[i],
+        game.numRows,
+        game.risk
+      );
 
       payouts[i] = (game.wager * multiplier) / 100;
       payout += payouts[i];
@@ -246,31 +293,18 @@ contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
     }
 
     payout += (game.numBets - i) * game.wager;
+    numGames = i;
+  }
 
-    emit Plinko_Outcome_Event(
-      playerAddress,
-      game.wager,
-      payout,
-      tokenAddress,
-      gamesResults,
-      game.numRows,
-      game.risk,
-      payouts,
-      i
-    );
-    _transferToBankroll(tokenAddress, game.wager * game.numBets);
-    delete (plinkoIDs[requestId]);
-    delete (plinkoGames[playerAddress]);
-    if (payout != 0) {
-      _transferPayout(playerAddress, payout, tokenAddress);
-    }
+  function setLightningMode(bool enabled) external onlyOwner {
+    isLightningModeEnabled = enabled;
   }
 
   function _plinkoGame(
     uint256 randomWords,
     uint8 numRows,
     uint8 risk
-  ) internal view returns (uint256 multiplier, uint16 currentGameResult) {
+  ) internal view returns (uint256 multiplier, uint16 currentGameResult, bool lightningMode) {
     int8 ended = 0;
     for (uint8 g = 0; g < numRows; g++) {
       bool bitValue = _getBitValue(randomWords, g);
@@ -283,6 +317,14 @@ contract PlinkoMock is Common, ChainlinkClient, ConfirmedOwner {
     }
     uint8 multiplierSlot = uint8(ended + int8(numRows)) >> 1;
     multiplier = plinkoMultipliers[risk][numRows][multiplierSlot];
+
+    // Check for lightning mode with a low probability (e.g., 1%)
+    if (isLightningModeEnabled) {
+      lightningMode = (randomWords % 1000) < 10; // 1% chance for lightning mode
+      if (lightningMode) {
+        multiplier *= LIGHTNING_MULTIPLIER;
+      }
+    }
   }
 
   function _getBitValue(uint256 four_nibbles, uint256 index) internal pure returns (bool) {

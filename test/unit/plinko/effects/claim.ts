@@ -130,7 +130,7 @@ export default function shouldBehaveLikePlay(): void {
           log.topics[0] ===
           ethers.keccak256(
             ethers.toUtf8Bytes(
-              "Plinko_Outcome_Event(address,uint256,uint256,address,uint16[],uint8,uint8,uint256[],uint32)"
+              "Plinko_Outcome_Event(address,uint256,uint256,address,uint16[],bool[],uint8,uint8,uint256[],uint32)"
             )
           )
       );
@@ -147,6 +147,7 @@ export default function shouldBehaveLikePlay(): void {
           payout,
           tokenAddress,
           paths,
+          lightningModes,
           numRows,
           risk,
           payouts,
@@ -159,6 +160,7 @@ export default function shouldBehaveLikePlay(): void {
         console.log("payout", payout.toString());
         console.log("tokenAddress", tokenAddress);
         console.log("paths", paths);
+        console.log("lightningModes", lightningModes);
         console.log("numRows", numRows);
         console.log("risk", risk);
         console.log("payouts", payouts);
